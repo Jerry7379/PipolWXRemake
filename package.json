@@ -1,0 +1,10 @@
+{
+  "name": "PipolWXRemake",
+  "uuid": "1510b642-b6f4-4036-b6be-9fff2330c9d1",
+  "scripts": {
+    "test:replay": "node tools/replay-baselines.mjs"
+  },
+  "creator": {
+    "version": "3.8.5"
+  }
+}

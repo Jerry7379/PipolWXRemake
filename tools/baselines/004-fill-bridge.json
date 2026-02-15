@@ -1,0 +1,70 @@
+{
+  "id": "baseline_004_fill_bridge",
+  "description": "通过 Fill 在竖井口补桥，角色避免坠落并到达目标",
+  "fixedStepSec": 0.1,
+  "maxTicks": 400,
+  "level": {
+    "id": "baseline_level_004",
+    "name": "Fill Bridge",
+    "gridSize": {
+      "cols": 8,
+      "rows": 6,
+      "cellSize": 32
+    },
+    "timeLimitSec": 40,
+    "requiredSaved": 1,
+    "simulationRules": {
+      "movementPriority": "gravity-then-horizontal",
+      "reverseWhenBlocked": true,
+      "checkGoalBeforeMove": true,
+      "checkGoalAfterMove": true,
+      "spawnRetryDelaySec": 0.2,
+      "outOfBoundsKillY": -1,
+      "maxSafeFallCells": -1,
+      "maxStepUpCells": 1,
+      "maxStepDownCells": 1,
+      "agentCollisionWidthCells": 1,
+      "agentCollisionHeightCells": 1
+    },
+    "spawn": {
+      "position": {
+        "x": 1,
+        "y": 3
+      },
+      "direction": 1,
+      "count": 1,
+      "intervalSec": 0.8
+    },
+    "goal": {
+      "x": 6,
+      "y": 3,
+      "width": 1,
+      "height": 1
+    },
+    "terrain": [
+      "........",
+      "........",
+      "........",
+      "###o####",
+      "###o####",
+      "###o####"
+    ]
+  },
+  "actions": [
+    {
+      "tick": 2,
+      "type": "fill",
+      "x": 3,
+      "y": 2
+    }
+  ],
+  "expected": {
+    "spawned": 1,
+    "saved": 1,
+    "dead": 0,
+    "alive": 0,
+    "changedActions": 1,
+    "finished": true,
+    "success": true
+  }
+}

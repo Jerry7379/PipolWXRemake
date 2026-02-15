@@ -1,0 +1,60 @@
+{
+  "id": "baseline_003_horizontal_priority",
+  "description": "水平优先时先横移进入目标，不会先下落",
+  "fixedStepSec": 0.1,
+  "maxTicks": 300,
+  "level": {
+    "id": "baseline_level_003",
+    "name": "Horizontal Priority",
+    "gridSize": {
+      "cols": 6,
+      "rows": 5,
+      "cellSize": 32
+    },
+    "timeLimitSec": 30,
+    "requiredSaved": 1,
+    "simulationRules": {
+      "movementPriority": "horizontal-then-gravity",
+      "reverseWhenBlocked": true,
+      "checkGoalBeforeMove": true,
+      "checkGoalAfterMove": true,
+      "spawnRetryDelaySec": 0.2,
+      "outOfBoundsKillY": -1,
+      "maxSafeFallCells": -1,
+      "maxStepUpCells": 1,
+      "maxStepDownCells": 1,
+      "agentCollisionWidthCells": 1,
+      "agentCollisionHeightCells": 1
+    },
+    "spawn": {
+      "position": {
+        "x": 1,
+        "y": 2
+      },
+      "direction": 1,
+      "count": 1,
+      "intervalSec": 0.8
+    },
+    "goal": {
+      "x": 2,
+      "y": 2,
+      "width": 1,
+      "height": 1
+    },
+    "terrain": [
+      "......",
+      "......",
+      "......",
+      "#.####",
+      "######"
+    ]
+  },
+  "expected": {
+    "spawned": 1,
+    "saved": 1,
+    "dead": 0,
+    "alive": 0,
+    "finished": true,
+    "success": true
+  }
+}
