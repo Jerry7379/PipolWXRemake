@@ -8,6 +8,7 @@ export class TerrainGrid {
   private readonly _cells: Uint8Array;
   private readonly _editable: Uint8Array;
   private readonly _protected = new Set<string>();
+  private readonly _goal = { x: 0, y: 0, width: 0, height: 0 };
 
   constructor(level: LevelConfig) {
     this.cols = level.gridSize.cols;
@@ -15,6 +16,12 @@ export class TerrainGrid {
     this.cellSize = level.gridSize.cellSize;
     this._cells = new Uint8Array(this.cols * this.rows);
     this._editable = new Uint8Array(this.cols * this.rows);
+    this._goal = {
+      x: level.goal.x,
+      y: level.goal.y,
+      width: level.goal.width,
+      height: level.goal.height,
+    };
 
     // 关卡 terrain 是从上到下书写，逻辑网格是从下到上索引。
     for (let y = 0; y < this.rows; y += 1) {
@@ -71,7 +78,7 @@ export class TerrainGrid {
   }
 
   isProtected(x: number, y: number): boolean {
-    return this._protected.has(this.key(x, y));
+    return this._protected.has(this.key(x, y)) || TerrainGrid.contains(this._goal, { x, y });
   }
 
   dig(x: number, y: number): boolean {

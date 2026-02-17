@@ -69,7 +69,9 @@ export class GameSimulator {
           continue;
         }
 
-        agent.fallCells = 0;
+        if (this.resolveLanding(agent)) {
+          continue;
+        }
         this.tryHorizontalStep(agent);
       } else {
         this.tryHorizontalStep(agent);
@@ -79,7 +81,9 @@ export class GameSimulator {
 
         const fell = this.tryGravityStep(agent);
         if (!fell) {
-          agent.fallCells = 0;
+          if (this.resolveLanding(agent)) {
+            continue;
+          }
         }
       }
 
@@ -151,7 +155,6 @@ export class GameSimulator {
       }
 
       agent.pos = { x: nextX, y: targetY };
-      agent.fallCells = 0;
       return true;
     }
 
@@ -166,7 +169,6 @@ export class GameSimulator {
       }
 
       agent.pos = { x: nextX, y: targetY };
-      agent.fallCells = 0;
       return true;
     }
 
@@ -184,12 +186,27 @@ export class GameSimulator {
     agent.pos = { x: agent.pos.x, y: agent.pos.y - 1 };
     agent.fallCells += 1;
 
-    const fallTooFar = this._rules.maxSafeFallCells >= 0 && agent.fallCells > this._rules.maxSafeFallCells;
-    if (agent.pos.y <= this._rules.outOfBoundsKillY || fallTooFar) {
+    if (agent.pos.y <= this._rules.outOfBoundsKillY) {
       agent.dead = true;
       this._dead += 1;
     }
 
+    return true;
+  }
+
+  private resolveLanding(agent: AgentState): boolean {
+    if (agent.fallCells <= 0) {
+      return false;
+    }
+
+    const fallTooFar = this._rules.maxSafeFallCells >= 0 && agent.fallCells > this._rules.maxSafeFallCells;
+    agent.fallCells = 0;
+    if (!fallTooFar) {
+      return false;
+    }
+
+    agent.dead = true;
+    this._dead += 1;
     return true;
   }
 
@@ -271,13 +288,17 @@ export class GameSimulator {
   }
 
   private intersectsGoal(agent: AgentState): boolean {
-    for (let dy = 0; dy < this.agentHeight; dy += 1) {
-      for (let dx = 0; dx < this.agentWidth; dx += 1) {
-        if (TerrainGrid.contains(this._level.goal, { x: agent.pos.x + dx, y: agent.pos.y + dy })) {
-          return true;
-        }
-      }
-    }
-    return false;
+    const ax0 = agent.pos.x;
+    const ay0 = agent.pos.y;
+    const ax1 = ax0 + this.agentWidth;
+    const ay1 = ay0 + this.agentHeight;
+
+    const gx0 = this._level.goal.x;
+    const gy0 = this._level.goal.y;
+    const gx1 = gx0 + this._level.goal.width;
+    const gy1 = gy0 + this._level.goal.height;
+
+    // 只要与终点区域发生接触（含贴边）即可判定成功。
+    return ax0 <= gx1 && ax1 >= gx0 && ay0 <= gy1 && ay1 >= gy0;
   }
 }

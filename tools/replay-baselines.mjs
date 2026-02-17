@@ -20,10 +20,6 @@ const DEFAULT_RULES = {
   maxSafeFallCells: -1,
 };
 
-function contains(rect, p) {
-  return p.x >= rect.x && p.y >= rect.y && p.x < rect.x + rect.width && p.y < rect.y + rect.height;
-}
-
 function loadCases() {
   const files = fs
     .readdirSync(BASELINE_DIR)
@@ -152,18 +148,17 @@ function simulate(caseData) {
     if (agent.dead || agent.reachedGoal) {
       return false;
     }
-    let hit = false;
-    for (let dy = 0; dy < agentHeight; dy += 1) {
-      for (let dx = 0; dx < agentWidth; dx += 1) {
-        if (contains(level.goal, { x: agent.pos.x + dx, y: agent.pos.y + dy })) {
-          hit = true;
-          break;
-        }
-      }
-      if (hit) {
-        break;
-      }
-    }
+    const ax0 = agent.pos.x;
+    const ay0 = agent.pos.y;
+    const ax1 = ax0 + agentWidth;
+    const ay1 = ay0 + agentHeight;
+
+    const gx0 = level.goal.x;
+    const gy0 = level.goal.y;
+    const gx1 = gx0 + level.goal.width;
+    const gy1 = gy0 + level.goal.height;
+
+    const hit = ax0 <= gx1 && ax1 >= gx0 && ay0 <= gy1 && ay1 >= gy0;
     if (!hit) {
       return false;
     }
@@ -210,11 +205,26 @@ function simulate(caseData) {
     agent.pos = { x: agent.pos.x, y: agent.pos.y - 1 };
     agent.fallCells += 1;
 
-    const fallTooFar = rules.maxSafeFallCells >= 0 && agent.fallCells > rules.maxSafeFallCells;
-    if (agent.pos.y <= rules.outOfBoundsKillY || fallTooFar) {
+    if (agent.pos.y <= rules.outOfBoundsKillY) {
       agent.dead = true;
       dead += 1;
     }
+    return true;
+  };
+
+  const resolveLanding = (agent) => {
+    if (agent.fallCells <= 0) {
+      return false;
+    }
+
+    const fallTooFar = rules.maxSafeFallCells >= 0 && agent.fallCells > rules.maxSafeFallCells;
+    agent.fallCells = 0;
+    if (!fallTooFar) {
+      return false;
+    }
+
+    agent.dead = true;
+    dead += 1;
     return true;
   };
 
@@ -236,7 +246,6 @@ function simulate(caseData) {
         continue;
       }
       agent.pos = { x: nextX, y: targetY };
-      agent.fallCells = 0;
       return true;
     }
 
@@ -250,7 +259,6 @@ function simulate(caseData) {
         continue;
       }
       agent.pos = { x: nextX, y: targetY };
-      agent.fallCells = 0;
       return true;
     }
 
@@ -363,7 +371,9 @@ function simulate(caseData) {
           continue;
         }
 
-        agent.fallCells = 0;
+        if (resolveLanding(agent)) {
+          continue;
+        }
         tryHorizontalStep(agent);
       } else {
         tryHorizontalStep(agent);
@@ -373,7 +383,9 @@ function simulate(caseData) {
 
         const fell = tryGravityStep(agent);
         if (!fell) {
-          agent.fallCells = 0;
+          if (resolveLanding(agent)) {
+            continue;
+          }
         }
       }
 

@@ -15,7 +15,7 @@
     "checkGoalAfterMove": true,
     "spawnRetryDelaySec": 0.2,
     "outOfBoundsKillY": -1,
-    "maxSafeFallCells": -1,
+    "maxSafeFallCells": 11,
     "maxStepUpCells": 2,
     "maxStepDownCells": 2,
     "agentCollisionWidthCells": 1,
