@@ -16,6 +16,7 @@
 - `TerrainDebugRenderer`
 - `TerrainPainterInput`
 - 当前关卡从 `resources/levels` 自动加载，支持多关切换（现有 2 关）。
+- `assets/levels` 镜像目录已删除，本文中历史记录提到该目录仅用于回顾旧变更。
 
 ## 3. 已完成能力
 
@@ -641,3 +642,492 @@
 - `assets/resources/levels/level_002.json`
 - 验证结果：
 - `npm run test:replay` 5/5 通过
+
+### 2026-02-17（会话续记-出生管道改为马里奥风）
+
+- 用户需求：出生管道贴图太丑，希望换成马里奥管道风格。
+- 已完成改动：
+- 在 `TerrainDebugRenderer` 中将原灰色金属管改为绿色马里奥风格原创重绘（管身底色、左高光、右阴影、亮绿色管口与内阴影）。
+- 保持原有几何锚点与出生脉冲逻辑，不改玩法行为。
+- 影响文件：
+- `assets/scripts/render/TerrainDebugRenderer.ts`
+- 验证结果：
+- `npm run test:replay` 5/5 通过
+
+### 2026-02-17（会话续记-管道宽度改为人物 3 倍）
+
+- 用户需求：管道太窄，宽度改为人物的 3 倍。
+- 已完成改动：
+- 出生管道宽度不再使用固定值，改为按“人物视觉宽度 * 3”动态计算。
+- 管口宽度同步基于管身宽度计算，保持比例协调。
+- 影响文件：
+- `assets/scripts/render/TerrainDebugRenderer.ts`
+- 验证结果：
+- `npm run test:replay` 5/5 通过
+
+### 2026-02-17（会话续记-隐藏顶部三个按钮）
+
+- 用户需求：顶部三个按钮（Dig / Fill / Restart）先隐藏。
+- 已完成改动：
+- `GameController` 新增运行时开关 `showTopButtons`（默认 `false`）。
+- `ButtonGroup` 根据该开关控制 `active`，关闭时不再创建/显示顶部三个按钮。
+- 按钮逻辑代码保留，后续若要恢复只需把 `showTopButtons` 设为 `true`。
+- 影响文件：
+- `assets/scripts/controllers/GameController.ts`
+- 验证结果：
+- `npm run test:replay` 5/5 通过
+
+### 2026-02-17（会话续记-微信上传 libVersion 报错修复）
+
+- 用户反馈：微信开发者工具上传时报错 `project.config.json: libVersion 字段需为 string`。
+- 排查结果：
+- `build/wechatgame/project.config.json` 的 `libVersion` 曾被构建过程写成 `\"game\"`，导致上传校验失败。
+- 已完成修复：
+- 执行 `npm run fix:wechat-config`，将以下四个文件统一修正为字符串版本号 `\"3.14.2\"`：
+- `project.config.json`
+- `project.private.config.json`
+- `build/wechatgame/project.config.json`
+- `build/wechatgame/project.private.config.json`
+- 为防止后续构建再次覆盖，在 `profiles/v2/packages/wechatgame.json` 的任务配置与 options 中补充 `libVersion: \"3.14.2\"`。
+- 影响文件：
+- `profiles/v2/packages/wechatgame.json`
+- 验证结果：
+- 四个配置文件的 `libVersion` 均已确认为 `string` 类型且值为 `\"3.14.2\"`。
+
+### 2026-02-17（会话续记-终点改为 12x12 且置于 24x16 挖空区）
+
+- 用户需求：终点改成 `12x12` 贴图，且终点被一个 `24x16` 的挖空区域包含。
+- 已完成改动：
+- 运行关卡（`assets/resources/levels`）中：
+- `goal` 改为 `6x6` 格（`cellSize=2`），即 `12x12 px`。
+- 在终点周围创建 `12x8` 格挖空区（`24x16 px`），并确保完全包含终点。
+- 同步更新 `assets/levels` 镜像关卡为同像素规格（`cellSize=4` 下对应 `goal=3x3`、挖空区 `6x4`）。
+- 终点标记渲染尺寸改为优先跟随 `goal` 区域，保证视觉尺寸与配置一致。
+- 影响文件：
+- `assets/resources/levels/level_001.json`
+- `assets/resources/levels/level_002.json`
+- `assets/levels/level_001.json`
+- `assets/levels/level_002.json`
+- `assets/scripts/render/TerrainDebugRenderer.ts`
+- 验证结果：
+- 自动校验通过（两关均为 `goal=12x12 px`，挖空区 `24x16 px`，且 `contains=true`）
+- `npm run test:replay` 5/5 通过
+
+### 2026-02-17（会话续记-终点像素尺寸查询，仅讨论）
+
+- 用户询问：当前终点占多少像素。
+- 查询结论：
+- 运行关卡（`assets/resources/levels`）两关终点均为 `24x24` 格，`cellSize=2`，因此终点尺寸为 `48x48` 像素（面积 `2304 px²`）。
+- 旧镜像关卡（`assets/levels`）终点为 `16x16` 格，`cellSize=4`，因此是 `64x64` 像素（面积 `4096 px²`）。
+- 本次仅查询，无代码改动。
+
+### 2026-02-17（会话续记-参数化地形 + 自动生成 terrain）
+
+- 用户需求：采用“参数化地形 + 自动生成 terrain”替代逐行字符串手写。
+- 已完成改动：
+- `LevelLoader` 新增 `terrainTemplate` 支持，并保留旧 `terrain` 兼容：
+- 支持 `terrainTemplate.kind = \"layered\"`
+- 支持 `topAirRows`（顶部空气层）
+- 支持 `carveEditableRects`（生成后改为 `o`）
+- 支持 `forceSolidRects` / `forceSkyRects`（可选覆盖）
+- 运行关卡 `assets/resources/levels/level_001.json`、`level_002.json` 已迁移为 `terrainTemplate`，删除了大段 `terrain` 字符串。
+- 同步更新关卡内 `_effectGuide`，新增 `terrainTemplate` 字段说明。
+- 文档同步：
+- `docs/level-json-format.md` 改为推荐 `terrainTemplate` 写法，`terrain` 标注为旧格式兼容。
+- `docs/GameSpec.md` 增加参数化地形说明。
+- 影响文件：
+- `assets/scripts/core/LevelLoader.ts`
+- `assets/resources/levels/level_001.json`
+- `assets/resources/levels/level_002.json`
+- `docs/level-json-format.md`
+- `docs/GameSpec.md`
+- 验证结果：
+- 运行关卡检查通过（已无 `terrain`，存在 `terrainTemplate`）。
+- `npm run test:replay` 5/5 通过。
+- 备注：
+- 由于项目未安装 TypeScript CLI，未执行 `tsc --noEmit`（`npx tsc` 提示未安装）。
+
+### 2026-02-17（会话续记-terrain 方案讨论，仅讨论）
+
+- 用户反馈：`terrain` 逐行字符串方式不够优雅，询问是否有替代方案。
+- 本次结论（无代码改动）：
+- 建议后续改为“参数化地形描述 + 构建期生成 terrain”：
+- 用结构化字段描述基础土层与挖空区（如 `baseSoilTopY`、`voidRects`、`protectedRects`）。
+- 在加载前统一展开成当前 `terrain` 网格，兼容现有模拟逻辑。
+- 优点：配置更短、更直观、更易维护，且不破坏现有玩法代码。
+
+### 2026-02-17（会话续记-参数化地形正式落地）
+
+- 用户确认采用“参数化地形 + 自动生成 terrain”。
+- 已完成改动：
+- `LevelLoader` 支持 `terrainTemplate` 自动展开（并保留旧 `terrain` 兼容）：
+- 新增 `kind: layered` 生成器
+- 支持 `topAirRows`
+- 支持 `carveEditableRects`（生成 `o`）
+- 支持 `forceSolidRects` / `forceSkyRects`（可选覆盖）
+- 运行关卡已迁移为模板格式：
+- `assets/resources/levels/level_001.json`
+- `assets/resources/levels/level_002.json`
+- 两关移除了大段 `terrain` 字符串，改为 `terrainTemplate` 参数配置。
+- 文档已同步更新：
+- `docs/level-json-format.md`
+- `docs/GameSpec.md`
+- 影响文件：
+- `assets/scripts/core/LevelLoader.ts`
+- `assets/resources/levels/level_001.json`
+- `assets/resources/levels/level_002.json`
+- `docs/level-json-format.md`
+- `docs/GameSpec.md`
+- 验证结果：
+- 关卡 JSON 检查通过（已无 `terrain`、模板参数完整）
+- `npm run test:replay` 5/5 通过
+- 附注：
+- 本地未安装 TypeScript CLI，`npx tsc --noEmit` 未执行成功（提示未安装 `typescript`）。
+
+### 2026-02-17（会话续记-protectedCells 升级为参数化矩形）
+
+- 用户需求：将 `protectedCells` 升级成参数化矩形。
+- 已完成改动：
+- `LevelLoader` 新增 `protectedRects` 支持，并与旧 `protectedCells` 合并去重：
+- 关卡可同时写 `protectedRects` 与 `protectedCells`
+- 加载时统一展开为最终受保护格列表
+- `protectedRects` 超界部分自动裁剪到地图范围
+- 运行关卡已迁移到矩形写法，移除逐格 `protectedCells`：
+- `assets/resources/levels/level_001.json` -> `protectedRects: [{ x: 16, y: 308, width: 12, height: 16 }]`
+- `assets/resources/levels/level_002.json` -> `protectedRects: [{ x: 144, y: 308, width: 12, height: 16 }]`
+- 文档已同步：
+- `docs/level-json-format.md`
+- `docs/GameSpec.md`
+- 影响文件：
+- `assets/scripts/core/LevelLoader.ts`
+- `assets/resources/levels/level_001.json`
+- `assets/resources/levels/level_002.json`
+- `docs/level-json-format.md`
+- `docs/GameSpec.md`
+- 验证结果：
+- `npm run test:replay` 5/5 通过
+
+### 2026-02-17（会话续记-终点大小与贴图替换咨询，仅讨论）
+
+- 用户询问：调整终点大小应修改哪个字段，以及如何更换终点贴图。
+- 结论（无代码改动）：
+- 运行关卡请修改 `assets/resources/levels/*.json` 中 `goal.width / goal.height`（单位是格，像素 = 格数 * `gridSize.cellSize`）。
+- 当前终点视觉由 `TerrainDebugRenderer.drawGoalMarker` 用 Graphics 绘制，不是 Sprite 贴图；要换贴图需改为 Sprite 节点渲染方案。
+
+### 2026-02-17（会话续记-关卡数据源合并为单源）
+
+- 用户需求：`assets/resources/levels` 与 `assets/levels` 合并，只保留一个数据源。
+- 已完成改动：
+- 保留 `assets/resources/levels` 作为唯一运行关卡源。
+- 删除冗余镜像目录 `assets/levels` 与 `assets/levels.meta`，避免双份配置继续漂移。
+- 文档同步改为单源口径（接入步骤与任务文档均指向 `assets/resources/levels`）。
+- 影响文件：
+- `README.md`
+- `docs/first-level-tasks.md`
+- `docs/PROJECT_PROGRESS.md`
+- 删除文件：
+- `assets/levels.meta`
+- `assets/levels/level_001.json`
+- `assets/levels/level_001.json.meta`
+- `assets/levels/level_002.json`
+- `assets/levels/level_002.json.meta`
+
+### 2026-02-17（会话续记-终点贴图替换为 goal.png）
+
+- 用户需求：将终点贴图替换为 `assets/images/goal.png`。
+- 已完成改动：
+- `GameController` 新增终点 Sprite 渲染链路：
+- 新增开关 `useGoalSprite`（默认 `true`）
+- 新增资源路径 `goalSpriteResourcePath`（默认 `images/goal/spriteFrame`）
+- 关卡加载时自动创建/更新 `GoalSprite` 节点，并按 `goal.width/height * cellSize` 设置显示尺寸
+- 终点贴图加载成功后自动隐藏 `TerrainDebugRenderer` 中的门形 marker；加载失败自动回退 marker
+- 将 `assets/images/goal.png` 同步到 `assets/resources/images/goal.png`，用于运行时 `resources.load`。
+- 影响文件：
+- `assets/scripts/controllers/GameController.ts`
+- `assets/resources/images/goal.png`
+- `docs/PROJECT_PROGRESS.md`
+- 验证结果：
+- `npm run test:replay` 5/5 通过（玩法逻辑无回归）。
+- 说明：
+- 若 Cocos 资源面板未立即显示 `assets/resources/images/goal.png`，在编辑器中执行一次资源刷新或重开项目即可。
+
+### 2026-02-18（会话续记-清理未使用终点源文件）
+
+- 用户需求：清理用不上的源文件。
+- 已完成改动：
+- 删除重复资源目录 `assets/images`（含 `goal.png` 及其 `.meta`）。
+- 保留唯一运行资源 `assets/resources/images/goal.png`（及其 `.meta`），继续由 `GameController.goalSpriteResourcePath = images/goal/spriteFrame` 加载。
+- 影响文件：
+- 删除文件：
+- `assets/images.meta`
+- `assets/images/goal.png`
+- `assets/images/goal.png.meta`
+- `docs/PROJECT_PROGRESS.md`
+
+### 2026-02-18（会话续记-终点透明区域显示为白色问题定位，仅排查）
+
+- 用户问题：原图有透明区域，但游戏中显示为白色。
+- 排查结论（无代码改动）：
+- 检查 `assets/resources/images/goal.png` 的 alpha 数据后确认：该图虽然是 RGBA，但 alpha 通道全为 `255`（2048/2048 像素均不透明）。
+- 因此白色区域并非“透明被渲染错误”，而是贴图本身就是不透明白底。
+- 验证命令（本地已执行）：
+- `python3 - <<'PY' ... Image.open(...).convert('RGBA') ... alpha 统计 ... PY`
+- 输出要点：`unique alpha 1`、`a0 0`、`a255 2048`。
+
+### 2026-02-18（会话续记-终点贴图引用切换为 goal_house_transparent_80k）
+
+- 用户需求：将 `goal.png` 的引用切换为 `goal_house_transparent_80k.png`。
+- 已完成改动：
+- `GameController.goalSpriteResourcePath` 默认值从 `images/goal/spriteFrame` 改为 `images/goal_house_transparent_80k/spriteFrame`。
+- 影响文件：
+- `assets/scripts/controllers/GameController.ts`
+- `docs/PROJECT_PROGRESS.md`
+- 验证结果：
+- `npm run test:replay` 5/5 通过（玩法逻辑无回归）。
+
+### 2026-02-18（会话续记-预览仍显示旧终点贴图修复）
+
+- 用户问题：资源已导入但预览仍未显示新图。
+- 根因修复：
+- `GameController` 增加“终点贴图路径变更检测”，当路径变化时强制丢弃旧缓存并重新 `resources.load`，避免预览热更新沿用旧 `SpriteFrame`。
+- 增加旧路径自动迁移：若检测到历史路径 `images/goal/spriteFrame`，自动切换到 `images/goal_house_transparent_80k/spriteFrame`。
+- 影响文件：
+- `assets/scripts/controllers/GameController.ts`
+- `docs/PROJECT_PROGRESS.md`
+- 验证结果：
+- `npm run test:replay` 5/5 通过（玩法逻辑无回归）。
+
+### 2026-02-18（会话续记-按图片尺寸重调终点显示大小）
+
+- 用户需求：根据新终点图片尺寸重新调整场景中显示大小。
+- 已完成改动：
+- `GameController` 新增 `goalSpriteLongSideScale`（默认 `2`），用于控制终点贴图在场景中的长边缩放倍率。
+- 终点贴图尺寸计算改为：
+- 读取原图尺寸（`SpriteFrame.originalSize`）
+- 保持原始宽高比
+- 以“目标区长边 × `goalSpriteLongSideScale`”为显示长边进行缩放
+- 这样可避免大图被压成正方形，视觉尺寸与图片比例一致。
+- 影响文件：
+- `assets/scripts/controllers/GameController.ts`
+- `docs/PROJECT_PROGRESS.md`
+- 验证结果：
+- `npm run test:replay` 5/5 通过（玩法逻辑无回归）。
+
+### 2026-02-18（会话续记-goalSpriteLongSideScale 调整后观感不变修复）
+
+- 用户问题：把 `goalSpriteLongSideScale` 调成 `0.5`，场景内看起来没有变化。
+- 原因与修复：
+- 原因 1：旧实现里终点高亮框（固定按 `goal.width/height`）始终显示，容易掩盖 Sprite 尺寸变化。
+- 原因 2：`goalSpriteLongSideScale` 改动时不是每帧重算，运行中调整不够直观。
+- 修复：
+- `TerrainDebugRenderer` 新增 `showGoalArea`，并将目标高亮框绘制改为可开关。
+- `GameController` 在终点 Sprite 加载成功时，自动关闭 `showGoalMarker` 与 `showGoalArea`；加载失败时恢复。
+- `GameController.drawFrame` 增加终点 Sprite 尺寸实时更新（运行中改倍率可见）。
+- 影响文件：
+- `assets/scripts/render/TerrainDebugRenderer.ts`
+- `assets/scripts/controllers/GameController.ts`
+- `docs/PROJECT_PROGRESS.md`
+- 验证结果：
+- `npm run test:replay` 5/5 通过（玩法逻辑无回归）。
+
+### 2026-02-18（会话续记-终点尺寸未生效深度排查与强兜底）
+
+- 用户问题：`goalSpriteLongSideScale` 调整后仍看不出变化。
+- 深排结论与修复：
+- `goalSpriteResourcePath` 改为基路径 `images/goal_house_transparent_80k`，避免仅依赖单一路径格式。
+- 终点贴图加载改为多路径尝试（按顺序）：
+- `<path>`
+- `<path>/spriteFrame`
+- 若传入本身是 `/spriteFrame`，再回退尝试去后缀路径
+- 路径历史兼容：若检测到旧值 `images/goal` 或 `images/goal/spriteFrame`，自动迁移到 `images/goal_house_transparent_80k`。
+- 新增调试日志开关 `goalSpriteDebugLog`（默认 `true`）：
+- 贴图加载成功打印 `path` 与原图尺寸
+- 尺寸更新打印 `goalSpriteLongSideScale` 与当前实际显示尺寸（像素）
+- 影响文件：
+- `assets/scripts/controllers/GameController.ts`
+- `docs/PROJECT_PROGRESS.md`
+- 验证结果：
+- `npm run test:replay` 5/5 通过（玩法逻辑无回归）。
+
+### 2026-02-18（会话续记-场景实例值覆盖默认值修复）
+
+- 用户问题：日志持续显示 `scale=2.0000`，与代码默认 `0.5` 不一致。
+- 根因：Cocos 场景中的组件实例值会覆盖脚本默认值；仅改 `GameController.ts` 默认值不会自动覆盖已有场景实例。
+- 已完成改动：
+- 在 `assets/scene.scene` 的 `GameController` 组件实例上显式写入：
+- `goalSpriteResourcePath = "images/goal_house_transparent_80k"`
+- `goalSpriteLongSideScale = 0.5`
+- `goalSpriteDebugLog = true`
+- 同时显式写入 `showTopButtons=false`、`useGoalSprite=true`，避免实例与代码默认漂移。
+- 影响文件：
+- `assets/scene.scene`
+- `docs/PROJECT_PROGRESS.md`
+- 验证结果：
+- `npm run test:replay` 5/5 通过（玩法逻辑无回归）。
+
+### 2026-02-18（会话续记-恢复终点缩放为可配置）
+
+- 用户反馈：上一版像是把终点缩放“写死为 0.5”，改成 2 也不生效。
+- 已完成改动：
+- 删除 `assets/scene.scene` 中对 `goalSpriteLongSideScale/goalSpriteResourcePath/useGoalSprite` 的强制实例写入，避免固定覆盖。
+- 保持脚本默认值 `goalSpriteLongSideScale = 2`，并允许在 Inspector 正常修改。
+- 新增运行时配置日志 `[终点配置] ... scale=...`，每次关卡加载会打印当前实例实际值，便于确认“改值是否生效”。
+- 影响文件：
+- `assets/scene.scene`
+- `assets/scripts/controllers/GameController.ts`
+- `docs/PROJECT_PROGRESS.md`
+- 验证结果：
+- `npm run test:replay` 5/5 通过（玩法逻辑无回归）。
+
+### 2026-02-18（会话续记-终点逻辑区与贴图尺寸解耦）
+
+- 用户需求：终点贴图与关卡 `goal` 逻辑区分开配置。
+- 已完成改动：
+- `GameController` 新增终点贴图尺寸模式：
+- `goalSpriteUseFixedPixelSize`（默认 `true`）：启用固定像素尺寸模式（与 `goal.width/height` 解耦）
+- `goalSpriteWidthPx`（默认 `64`）
+- `goalSpriteHeightPx`（默认 `56`）
+- 旧参数 `goalSpriteLongSideScale` 保留为兼容模式使用（`goalSpriteUseFixedPixelSize=false` 时生效）。
+- 运行时日志增强：
+- `[终点配置]` 新增 `mode`、`fixed=宽x高`
+- `[终点尺寸]` 新增 `mode`、`fixed=宽x高`
+- 当前默认行为：
+- 终点逻辑判定仍由关卡 JSON 的 `goal` 控制；
+- 终点贴图显示大小默认由 `goalSpriteWidthPx/goalSpriteHeightPx` 控制，不再随 `goal.width/height` 改变。
+- 影响文件：
+- `assets/scripts/controllers/GameController.ts`
+- `docs/PROJECT_PROGRESS.md`
+- 验证结果：
+- `npm run test:replay` 5/5 通过（玩法逻辑无回归）。
+
+### 2026-02-18（会话续记-终点贴图与逻辑区改为关卡 JSON 配置）
+
+- 用户需求：
+- 终点贴图参数与终点逻辑区都通过关卡 JSON 配置；
+- 终点逻辑区支持可配置调试颜色（方便调试）。
+- 已完成改动：
+- `LevelLoader` 新增解析：
+- `goalVisual`：`spritePath/useFixedPixelSize/widthPx/heightPx/longSideScale`
+- `goalDebug`：`showArea/fillRgba/strokeRgba`
+- 兼容写法：`goalDebug` 可写在根字段，也可写在 `goal.debug`（根字段优先）。
+- `LevelConfig` 新增 `goalVisual` 与 `goalDebug` 类型字段与默认值。
+- `GameController` 每次加载关卡时读取并应用 `goalVisual`：
+- 终点贴图路径、固定像素尺寸、或按逻辑区倍率缩放都可按关卡独立配置。
+- `TerrainDebugRenderer` 支持按关卡应用终点逻辑区调试样式：
+- `showArea` 开关
+- `fillRgba` 填充色
+- `strokeRgba` 描边色
+- 两个运行关卡已补齐示例配置：
+- `assets/resources/levels/level_001.json`
+- `assets/resources/levels/level_002.json`
+- 文档同步：
+- `docs/level-json-format.md`
+- `docs/GameSpec.md`
+- 影响文件：
+- `assets/scripts/core/GameTypes.ts`
+- `assets/scripts/core/LevelLoader.ts`
+- `assets/scripts/controllers/GameController.ts`
+- `assets/scripts/render/TerrainDebugRenderer.ts`
+- `assets/resources/levels/level_001.json`
+- `assets/resources/levels/level_002.json`
+- `docs/level-json-format.md`
+- `docs/GameSpec.md`
+- `docs/PROJECT_PROGRESS.md`
+- 验证结果：
+- `npm run test:replay` 5/5 通过（玩法逻辑无回归）。
+
+### 2026-02-18（会话续记-goalDebug 层级提升到 goalVisual 之上）
+
+- 用户需求：`goalDebug` 应显示在 `goalVisual` 上层，避免被终点贴图覆盖。
+- 已完成改动：
+- `GameController` 新增独立覆盖层节点 `GoalDebugOverlay`（`Graphics`），专门绘制 `goalDebug`。
+- 覆盖层每帧强制设置为 `GameRoot` 最后一个子节点（最高同级渲染顺序），确保在 `GoalSprite` 上方。
+- `TerrainDebugRenderer` 内部的 `goal area` 绘制在运行时关闭，避免与覆盖层重复绘制。
+- 终点调试区颜色继续来自关卡 JSON 的 `goalDebug.fillRgba/strokeRgba`。
+- 影响文件：
+- `assets/scripts/controllers/GameController.ts`
+- `docs/PROJECT_PROGRESS.md`
+- 验证结果：
+- `npm run test:replay` 5/5 通过（玩法逻辑无回归）。
+
+### 2026-02-18（会话续记-goal 与 goalVisual 位置独立配置）
+
+- 用户需求：终点逻辑区位置（`goal`）和终点贴图位置（`goalVisual`）分开独立配置。
+- 已完成改动：
+- `goalVisual` 新增位置参数（关卡 JSON）：
+- `positionMode`: `goal-center` | `absolute-cell`
+- `positionCell`: `{ x, y }`（单位：格，贴图中心坐标）
+- 行为：
+- `positionMode=goal-center`：贴图中心跟随 `goal` 中心（兼容旧行为）
+- `positionMode=absolute-cell`：贴图中心使用 `goalVisual.positionCell`，与 `goal` 彻底解耦
+- `LevelLoader` 已新增字段解析与校验，`LevelConfig.goalVisual` 同步扩展类型。
+- `GameController` 贴图定位逻辑已按新字段计算。
+- 两个运行关卡已补齐示例字段（当前都设为 `goal-center`，以保持现有关卡观感不变）。
+- 文档同步：
+- `docs/level-json-format.md`
+- `docs/GameSpec.md`
+- 影响文件：
+- `assets/scripts/core/GameTypes.ts`
+- `assets/scripts/core/LevelLoader.ts`
+- `assets/scripts/controllers/GameController.ts`
+- `assets/resources/levels/level_001.json`
+- `assets/resources/levels/level_002.json`
+- `docs/level-json-format.md`
+- `docs/GameSpec.md`
+- `docs/PROJECT_PROGRESS.md`
+- 验证结果：
+- `npm run test:replay` 5/5 通过（玩法逻辑无回归）。
+
+### 2026-02-18（会话续记-已挖土地颜色调整）
+
+- 用户需求：将“被挖过的土地”颜色改为 `#5c1b01`。
+- 已完成改动：
+- `TerrainDebugRenderer.drawEditableHoleRuns` 的填充色由 `Color(36, 130, 24, 255)` 调整为 `Color(92, 27, 1, 255)`（即 `#5c1b01`）。
+- 影响文件：
+- `assets/scripts/render/TerrainDebugRenderer.ts`
+- `docs/PROJECT_PROGRESS.md`
+
+### 2026-02-18（会话续记-levels 目录新增 JSON 配置说明）
+
+- 用户需求：将关卡 JSON 的配置方法整理成一个 `md`，放在 JSON 同级目录。
+- 已完成改动：
+- 新增 `assets/resources/levels/LEVEL_JSON_CONFIG.md`。
+- 文档包含：
+- 坐标与单位说明
+- 最小可用 JSON 结构
+- 常改字段（spawn/goal/goalVisual/goalDebug/terrainTemplate/protectedRects）
+- 常见修改入口与排查建议
+- 影响文件：
+- `assets/resources/levels/LEVEL_JSON_CONFIG.md`
+- `docs/PROJECT_PROGRESS.md`
+
+### 2026-02-18（会话续记-删除关卡内 _effectGuide）
+
+- 用户需求：删除关卡 JSON 中的 `_effectGuide` 字段。
+- 已完成改动：
+- 从运行关卡配置移除 `_effectGuide`：
+- `assets/resources/levels/level_001.json`
+- `assets/resources/levels/level_002.json`
+- 保留 `_comment` 及所有实际生效字段不变。
+- 配置说明统一由同级文档维护：
+- `assets/resources/levels/LEVEL_JSON_CONFIG.md`
+- 验证结果：
+- 两关 JSON 语法校验通过（`JSON.parse`）。
+- 影响文件：
+- `assets/resources/levels/level_001.json`
+- `assets/resources/levels/level_002.json`
+- `docs/PROJECT_PROGRESS.md`
+
+### 2026-02-18（会话续记-人物层级提升到终点贴图上方）
+
+- 用户需求：人物模型显示在终点贴图（`GoalSprite`）上面。
+- 已完成改动：
+- `TerrainDebugRenderer` 新增独立人物覆盖层 `AgentOverlay`（子节点 + `Graphics`）。
+- 地形/管道/终点调试区继续在主 `graphics` 绘制；人物改为在 `AgentOverlay` 单独绘制。
+- 每帧将 `AgentOverlay` 置为当前最高 sibling，确保人物在 `GoalSprite` 之上。
+- `GoalDebugOverlay` 仍由 `GameController` 每帧置顶，因此调试框继续在最上层（不受影响）。
+- 验证结果：
+- `npm run test:replay` 5/5 通过（玩法逻辑无回归）。
+- 影响文件：
+- `assets/scripts/render/TerrainDebugRenderer.ts`
+- `docs/PROJECT_PROGRESS.md`

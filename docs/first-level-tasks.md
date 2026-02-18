@@ -8,7 +8,7 @@
 
 1. 场景接入
 - 挂载 `GameController` / `TerrainDebugRenderer` / `TerrainPainterInput`
-- 绑定 `level_001.json`
+- 使用默认自动加载（`assets/resources/levels/level_001.json`）
 - 跑通基础循环（生成、移动、胜负日志）
 
 2. 挖填交互验证

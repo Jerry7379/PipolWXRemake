@@ -10,8 +10,10 @@
 
 ```text
 assets/
-  levels/
-    level_001.json            # 第一关数据
+  resources/
+    levels/
+      level_001.json          # 第一关数据（运行时默认加载）
+      level_002.json          # 第二关数据（运行时默认加载）
   scripts/
     controllers/
       GameController.ts       # 主控制器（关卡加载/模拟/胜负）
@@ -30,7 +32,7 @@ assets/
 ## 快速接入（Cocos Creator 3.8.5）
 
 1. 新建一个 2D 项目（TypeScript）。
-2. 把本目录下 `assets/levels` 和 `assets/scripts` 整体拷进你的项目 `assets/`。
+2. 把本目录下 `assets/resources` 和 `assets/scripts` 整体拷进你的项目 `assets/`。
 3. 场景中创建一个 Node（建议命名 `GameRoot`），并挂载脚本：
 - `GameController`
 - `TerrainDebugRenderer`
@@ -44,8 +46,8 @@ assets/
 
 - 当前是“逻辑可玩”原型，渲染为调试样式（方块+圆点），便于先验证手感。
 - 坐标系采用“左下角为 (0,0)”的网格规则。
-- `level_001.json` 的 `terrain` 数组是“从上到下”书写，加载时会自动转换到底部原点坐标。
-- `terrain` 字符：
+- 关卡推荐使用 `terrainTemplate` 参数化配置；旧 `terrain` 数组写法仍兼容。
+- `terrain` 字符语义（兼容旧写法）：
 - `#` 实体且可编辑（可挖/可填）
 - `o` 空格但可编辑（土层洞）
 - `.` 空格且不可编辑（天空/管道区）

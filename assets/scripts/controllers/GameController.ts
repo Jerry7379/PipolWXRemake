@@ -8,6 +8,8 @@ import {
   JsonAsset,
   Label,
   Node,
+  Sprite,
+  SpriteFrame,
   UITransform,
   Vec3,
   Widget,
@@ -46,6 +48,39 @@ export class GameController extends Component {
 
   @property
   autoCreateRuntimeUI = true;
+
+  @property
+  showTopButtons = false;
+
+  @property
+  useGoalSprite = true;
+
+  @property
+  goalSpriteResourcePath = 'images/goal_house_transparent_80k';
+
+  @property
+  goalSpriteUseFixedPixelSize = true;
+
+  @property
+  goalSpriteWidthPx = 64;
+
+  @property
+  goalSpriteHeightPx = 56;
+
+  @property
+  goalSpriteLongSideScale = 2;
+
+  @property
+  goalSpritePositionMode = 'goal-center';
+
+  @property
+  goalSpritePositionCellX = 0;
+
+  @property
+  goalSpritePositionCellY = 0;
+
+  @property
+  goalSpriteDebugLog = true;
 
   @property
   fitHorizontalPaddingPx = 12;
@@ -97,6 +132,14 @@ export class GameController extends Component {
   private _resultPanel: Node | null = null;
   private _resultLabel: Label | null = null;
   private _syncingDesignResolution = false;
+  private _goalSpriteNode: Node | null = null;
+  private _goalSprite: Sprite | null = null;
+  private _goalSpriteFrame: SpriteFrame | null = null;
+  private _goalSpriteLoadToken = 0;
+  private _goalSpriteLoadedPath = '';
+  private _goalSpriteLastDebugKey = '';
+  private _goalDebugOverlayNode: Node | null = null;
+  private _goalDebugOverlayGraphics: Graphics | null = null;
 
   onEnable(): void {
     this.syncDesignResolutionToFrame();
@@ -259,6 +302,7 @@ export class GameController extends Component {
     this._statsTimer = 0;
     this._ended = false;
     this._ready = true;
+    this.applyLevelGoalConfig();
 
     if (this.autoFitToLevel) {
       this.fitNodeToLevel();
@@ -270,8 +314,11 @@ export class GameController extends Component {
         this._level.simulationRules.agentCollisionWidthCells,
         this._level.simulationRules.agentCollisionHeightCells,
       );
-      this.drawFrame();
+      this.applyGoalDebugStyleToRenderer();
     }
+    this.syncGoalVisual();
+    this.drawFrame();
+    this.logGoalSpriteRuntimeConfig();
 
     if (this.autoCreateRuntimeUI) {
       this.ensureRuntimeUI();
@@ -397,7 +444,343 @@ export class GameController extends Component {
     if (!this._level || !this._terrain || !this._sim || !this.renderer) {
       return;
     }
+    if (this.useGoalSprite && this._goalSpriteNode?.active) {
+      this.updateGoalSpriteTransform();
+    }
     this.renderer.draw(this._terrain, this._sim.getAgents(), this._level.goal, this._level.spawn);
+    this.drawGoalDebugOverlay();
+  }
+
+  private syncGoalVisual(): void {
+    if (!this._level) {
+      return;
+    }
+
+    if (!this.useGoalSprite) {
+      this.setGoalSpriteActive(false);
+      if (this.renderer) {
+        this.renderer.showGoalMarker = true;
+        this.renderer.showGoalArea = false;
+      }
+      return;
+    }
+
+    const desiredPath = this.resolveGoalSpritePath();
+    if (!desiredPath) {
+      this.onGoalSpriteLoadFailed(this.goalSpriteResourcePath, '路径为空');
+      return;
+    }
+
+    this.ensureGoalSpriteNode();
+    this.updateGoalSpriteTransform();
+
+    if (this._goalSpriteLoadedPath !== desiredPath) {
+      this._goalSpriteFrame = null;
+      this.setGoalSpriteActive(false);
+    }
+
+    if (this._goalSpriteFrame && this._goalSpriteLoadedPath === desiredPath) {
+      this.applyGoalSpriteFrame(this._goalSpriteFrame);
+      return;
+    }
+
+    this.loadGoalSpriteFrame(desiredPath);
+  }
+
+  private resolveGoalSpritePath(): string {
+    const path = this.goalSpriteResourcePath.trim().replace(/\/+$/, '');
+    if (path === 'images/goal/spriteFrame' || path === 'images/goal') {
+      this.goalSpriteResourcePath = 'images/goal_house_transparent_80k';
+      return this.goalSpriteResourcePath;
+    }
+    if (path.endsWith('/spriteFrame')) {
+      return path.slice(0, -'/spriteFrame'.length);
+    }
+    return path;
+  }
+
+  private applyLevelGoalConfig(): void {
+    if (!this._level) {
+      return;
+    }
+    const visual = this._level.goalVisual;
+    this.goalSpriteResourcePath = visual.spritePath;
+    this.goalSpriteUseFixedPixelSize = visual.useFixedPixelSize;
+    this.goalSpriteWidthPx = visual.widthPx;
+    this.goalSpriteHeightPx = visual.heightPx;
+    this.goalSpriteLongSideScale = visual.longSideScale;
+    this.goalSpritePositionMode = visual.positionMode;
+    this.goalSpritePositionCellX = visual.positionCell.x;
+    this.goalSpritePositionCellY = visual.positionCell.y;
+    this._goalSpriteFrame = null;
+    this._goalSpriteLoadedPath = '';
+    this._goalSpriteLastDebugKey = '';
+  }
+
+  private applyGoalDebugStyleToRenderer(): void {
+    if (!this.renderer || !this._level) {
+      return;
+    }
+    const debug = this._level.goalDebug;
+    // 目标调试区改由独立覆盖层渲染，避免被 GoalSprite 覆盖。
+    this.renderer.setGoalAreaDebugStyle(false, debug.fillRgba, debug.strokeRgba);
+  }
+
+  private getGoalDebugShowArea(): boolean {
+    return this._level?.goalDebug.showArea ?? true;
+  }
+
+  private ensureGoalDebugOverlayNode(): void {
+    if (this._goalDebugOverlayNode && this._goalDebugOverlayGraphics) {
+      return;
+    }
+    let node = this.node.getChildByName('GoalDebugOverlay');
+    if (!node) {
+      node = new Node('GoalDebugOverlay');
+      this.node.addChild(node);
+    }
+    node.layer = this.node.layer;
+
+    const transform = node.getComponent(UITransform) ?? node.addComponent(UITransform);
+    transform.setAnchorPoint(0, 0);
+    const graphics = node.getComponent(Graphics) ?? node.addComponent(Graphics);
+
+    this._goalDebugOverlayNode = node;
+    this._goalDebugOverlayGraphics = graphics;
+  }
+
+  private drawGoalDebugOverlay(): void {
+    if (!this._level) {
+      return;
+    }
+
+    this.ensureGoalDebugOverlayNode();
+    if (!this._goalDebugOverlayNode || !this._goalDebugOverlayGraphics) {
+      return;
+    }
+
+    const debug = this._level.goalDebug;
+    const g = this._goalDebugOverlayGraphics;
+    g.clear();
+
+    if (!debug.showArea) {
+      this._goalDebugOverlayNode.active = false;
+      return;
+    }
+
+    this._goalDebugOverlayNode.active = true;
+    // 保证覆盖层永远在 GoalSprite 上方。
+    this._goalDebugOverlayNode.setSiblingIndex(this.node.children.length - 1);
+
+    const c = this._level.gridSize.cellSize;
+    const w = this._level.gridSize.cols * c;
+    const h = this._level.gridSize.rows * c;
+    const transform =
+      this._goalDebugOverlayNode.getComponent(UITransform) ?? this._goalDebugOverlayNode.addComponent(UITransform);
+    transform.setAnchorPoint(0, 0);
+    transform.setContentSize(w, h);
+    this._goalDebugOverlayNode.setPosition(new Vec3(0, 0, 0));
+
+    const goal = this._level.goal;
+    g.fillColor = new Color(debug.fillRgba[0], debug.fillRgba[1], debug.fillRgba[2], debug.fillRgba[3]);
+    g.rect(goal.x * c, goal.y * c, goal.width * c, goal.height * c);
+    g.fill();
+
+    g.strokeColor = new Color(debug.strokeRgba[0], debug.strokeRgba[1], debug.strokeRgba[2], debug.strokeRgba[3]);
+    g.lineWidth = Math.max(2, c * 0.16);
+    g.rect(goal.x * c, goal.y * c, goal.width * c, goal.height * c);
+    g.stroke();
+  }
+
+  private ensureGoalSpriteNode(): void {
+    if (this._goalSpriteNode && this._goalSprite) {
+      return;
+    }
+
+    let node = this.node.getChildByName('GoalSprite');
+    if (!node) {
+      node = new Node('GoalSprite');
+      this.node.addChild(node);
+    }
+    node.layer = this.node.layer;
+
+    const transform = node.getComponent(UITransform) ?? node.addComponent(UITransform);
+    transform.setAnchorPoint(0.5, 0.5);
+    const sprite = node.getComponent(Sprite) ?? node.addComponent(Sprite);
+    sprite.sizeMode = Sprite.SizeMode.CUSTOM;
+
+    this._goalSpriteNode = node;
+    this._goalSprite = sprite;
+  }
+
+  private updateGoalSpriteTransform(): void {
+    if (!this._level || !this._goalSpriteNode || !this._goalSprite) {
+      return;
+    }
+
+    const c = this._level.gridSize.cellSize;
+    const goal = this._level.goal;
+    const logicGoalW = Math.max(1, goal.width * c);
+    const logicGoalH = Math.max(1, goal.height * c);
+    let width = logicGoalW;
+    let height = logicGoalH;
+
+    if (this.goalSpriteUseFixedPixelSize) {
+      // 视觉尺寸与逻辑区解耦：使用固定像素大小。
+      width = Math.max(1, this.goalSpriteWidthPx);
+      height = Math.max(1, this.goalSpriteHeightPx);
+    } else if (this._goalSpriteFrame) {
+      // 兼容旧模式：按逻辑区长边倍率缩放，保持贴图宽高比。
+      const raw = this._goalSpriteFrame.originalSize;
+      const rawW = Math.max(1, raw.width);
+      const rawH = Math.max(1, raw.height);
+      const rawLong = Math.max(rawW, rawH);
+      const targetLong = Math.max(logicGoalW, logicGoalH) * Math.max(0.2, this.goalSpriteLongSideScale);
+      const scale = targetLong / rawLong;
+      width = Math.max(1, rawW * scale);
+      height = Math.max(1, rawH * scale);
+    }
+
+    let x = (goal.x + goal.width * 0.5) * c;
+    let y = (goal.y + goal.height * 0.5) * c;
+    if (this.goalSpritePositionMode === 'absolute-cell') {
+      x = this.goalSpritePositionCellX * c;
+      y = this.goalSpritePositionCellY * c;
+    }
+
+    const transform = this._goalSpriteNode.getComponent(UITransform) ?? this._goalSpriteNode.addComponent(UITransform);
+    transform.setAnchorPoint(0.5, 0.5);
+    transform.setContentSize(width, height);
+
+    this._goalSprite.sizeMode = Sprite.SizeMode.CUSTOM;
+    this._goalSpriteNode.setPosition(new Vec3(x, y, 0));
+    this.debugGoalSpriteSize(width, height, logicGoalW, logicGoalH);
+  }
+
+  private loadGoalSpriteFrame(path: string): void {
+    const loadToken = ++this._goalSpriteLoadToken;
+    const candidates: string[] = [];
+    const pushCandidate = (candidate: string): void => {
+      const key = candidate.trim();
+      if (!key || candidates.includes(key)) {
+        return;
+      }
+      candidates.push(key);
+    };
+    pushCandidate(path);
+    pushCandidate(`${path}/spriteFrame`);
+    if (path.endsWith('/spriteFrame')) {
+      pushCandidate(path.slice(0, -'/spriteFrame'.length));
+    }
+    this.tryLoadGoalSpriteFrame(candidates, loadToken, 0, []);
+  }
+
+  private tryLoadGoalSpriteFrame(
+    candidates: string[],
+    loadToken: number,
+    index: number,
+    errors: string[],
+  ): void {
+    if (loadToken !== this._goalSpriteLoadToken) {
+      return;
+    }
+    if (index >= candidates.length) {
+      const reason = errors.length > 0 ? errors.join(' | ') : '无可用路径';
+      this.onGoalSpriteLoadFailed(this.goalSpriteResourcePath, reason);
+      return;
+    }
+
+    const candidate = candidates[index];
+    resources.load(candidate, SpriteFrame, (err, spriteFrame) => {
+      if (loadToken !== this._goalSpriteLoadToken) {
+        return;
+      }
+      if (err || !spriteFrame) {
+        errors.push(`${candidate}: ${err?.message ?? 'spriteFrame 为空'}`);
+        this.tryLoadGoalSpriteFrame(candidates, loadToken, index + 1, errors);
+        return;
+      }
+
+      this._goalSpriteLoadedPath = candidate;
+      this._goalSpriteFrame = spriteFrame;
+      if (this.goalSpriteDebugLog) {
+        const raw = spriteFrame.originalSize;
+        log(`[终点贴图加载成功] path=${candidate} raw=${raw.width}x${raw.height}`);
+      }
+      this.applyGoalSpriteFrame(spriteFrame);
+    });
+  }
+
+  private debugGoalSpriteSize(width: number, height: number, goalW: number, goalH: number): void {
+    if (!this.goalSpriteDebugLog || !this.useGoalSprite) {
+      return;
+    }
+    const mode = this.goalSpriteUseFixedPixelSize ? 'fixed' : 'goal-scale';
+    const key =
+      `${mode}|${this.goalSpriteLongSideScale.toFixed(4)}|${width.toFixed(2)}x${height.toFixed(2)}` +
+      `|pos=${this.goalSpritePositionMode}:${this.goalSpritePositionCellX.toFixed(2)},${this.goalSpritePositionCellY.toFixed(2)}` +
+      `|goal=${goalW.toFixed(2)}x${goalH.toFixed(2)}|path=${this._goalSpriteLoadedPath || 'none'}`;
+    if (key === this._goalSpriteLastDebugKey) {
+      return;
+    }
+    this._goalSpriteLastDebugKey = key;
+    log(
+      `[终点尺寸] mode=${mode} scale=${this.goalSpriteLongSideScale.toFixed(4)} ` +
+        `sprite=${width.toFixed(2)}x${height.toFixed(2)} goal=${goalW.toFixed(2)}x${goalH.toFixed(2)} ` +
+        `posMode=${this.goalSpritePositionMode} posCell=${this.goalSpritePositionCellX.toFixed(2)},${this.goalSpritePositionCellY.toFixed(2)} ` +
+        `fixed=${this.goalSpriteWidthPx.toFixed(2)}x${this.goalSpriteHeightPx.toFixed(2)} ` +
+        `path=${this._goalSpriteLoadedPath || 'none'}`,
+    );
+  }
+
+  private logGoalSpriteRuntimeConfig(): void {
+    if (!this.goalSpriteDebugLog) {
+      return;
+    }
+    log(
+      `[终点配置] use=${this.useGoalSprite} path=${this.goalSpriteResourcePath} ` +
+        `mode=${this.goalSpriteUseFixedPixelSize ? 'fixed' : 'goal-scale'} ` +
+        `posMode=${this.goalSpritePositionMode} posCell=${this.goalSpritePositionCellX.toFixed(2)},${this.goalSpritePositionCellY.toFixed(2)} ` +
+        `fixed=${this.goalSpriteWidthPx.toFixed(2)}x${this.goalSpriteHeightPx.toFixed(2)} ` +
+        `scale=${this.goalSpriteLongSideScale.toFixed(4)}`,
+    );
+  }
+
+  private applyGoalSpriteFrame(spriteFrame: SpriteFrame): void {
+    this.ensureGoalSpriteNode();
+    if (!this._goalSprite || !this._goalSpriteNode) {
+      return;
+    }
+
+    this._goalSprite.spriteFrame = spriteFrame;
+    this._goalSprite.sizeMode = Sprite.SizeMode.CUSTOM;
+    this._goalSpriteNode.active = true;
+    this.updateGoalSpriteTransform();
+
+    if (this.renderer) {
+      this.renderer.showGoalMarker = false;
+      this.renderer.showGoalArea = false;
+    }
+    this.drawFrame();
+  }
+
+  private onGoalSpriteLoadFailed(path: string, reason: string): void {
+    this._goalSpriteFrame = null;
+    this._goalSpriteLoadedPath = '';
+    this._goalSpriteLastDebugKey = '';
+    warn(`[终点贴图加载失败] resources/${path}，${reason}`);
+    this.setGoalSpriteActive(false);
+    if (this.renderer) {
+      this.renderer.showGoalMarker = true;
+      this.renderer.showGoalArea = false;
+    }
+    this.drawFrame();
+  }
+
+  private setGoalSpriteActive(active: boolean): void {
+    if (this._goalSpriteNode) {
+      this._goalSpriteNode.active = active;
+    }
   }
 
   private ensureRuntimeUI(): void {
@@ -473,6 +856,10 @@ export class GameController extends Component {
       root.addChild(group);
     }
     group.layer = root.layer;
+    group.active = this.showTopButtons;
+    if (!this.showTopButtons) {
+      return;
+    }
 
     const transform = group.getComponent(UITransform) ?? group.addComponent(UITransform);
     transform.setContentSize(360, 48);

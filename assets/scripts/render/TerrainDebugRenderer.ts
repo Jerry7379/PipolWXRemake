@@ -1,4 +1,4 @@
-import { _decorator, Color, Component, Graphics } from 'cc';
+import { _decorator, Color, Component, Graphics, Node, UITransform } from 'cc';
 import { AgentState, Rect, SpawnConfig } from '../core/GameTypes';
 import { TerrainGrid } from '../core/TerrainGrid';
 
@@ -15,9 +15,19 @@ export class TerrainDebugRenderer extends Component {
   @property
   agentVisualScale = 1.5;
 
+  @property
+  showGoalMarker = true;
+
+  @property
+  showGoalArea = true;
+
   private _cellSize = 32;
   private _agentCollisionWidthCells = 1;
   private _agentCollisionHeightCells = 1;
+  private _goalAreaFillColor = new Color(255, 243, 150, 70);
+  private _goalAreaStrokeColor = new Color(255, 246, 138, 255);
+  private _agentOverlayNode: Node | null = null;
+  private _agentOverlayGraphics: Graphics | null = null;
 
   onLoad(): void {
     if (!this.graphics) {
@@ -35,6 +45,12 @@ export class TerrainDebugRenderer extends Component {
   setAgentCollisionFootprint(widthCells: number, heightCells: number): void {
     this._agentCollisionWidthCells = Math.max(1, Math.floor(widthCells));
     this._agentCollisionHeightCells = Math.max(1, Math.floor(heightCells));
+  }
+
+  setGoalAreaDebugStyle(showArea: boolean, fillRgba: readonly number[], strokeRgba: readonly number[]): void {
+    this.showGoalArea = showArea;
+    this._goalAreaFillColor = new Color(fillRgba[0], fillRgba[1], fillRgba[2], fillRgba[3]);
+    this._goalAreaStrokeColor = new Color(strokeRgba[0], strokeRgba[1], strokeRgba[2], strokeRgba[3]);
   }
 
   draw(terrain: TerrainGrid, agents: readonly AgentState[], goal: Rect, spawn: SpawnConfig): void {
@@ -99,50 +115,69 @@ export class TerrainDebugRenderer extends Component {
     }
     g.stroke();
 
-    // 出生管道（加厚金属风格）
+    // 出生管道（马里奥风格绿色管道，原创重绘）
     const pipeX = spawn.position.x * c + c * 0.5;
     const pipeMouthY = (spawn.position.y + 0.5) * c;
     const shaftBottom = pipeMouthY + c * 0.24;
     const shaftTop = height - c * 0.12;
-    const shaftW = c * 0.74;
+    const agentVisualHeightPx = Math.max(c * 1.8, c * Math.max(1, this.agentHeightCells * this.agentVisualScale));
+    const agentVisualWidthPx = agentVisualHeightPx * 0.5;
+    // 管道宽度按“小人视觉宽度的 3 倍”计算。
+    const shaftW = Math.max(c * 1.2, agentVisualWidthPx * 3);
     const shaftH = Math.max(c * 1.2, shaftTop - shaftBottom);
-    const rimW = c * 1.22;
-    const rimH = c * 0.46;
-    const rimY = pipeMouthY + c * 0.06;
-    const shaftRadius = Math.max(2, c * 0.15);
+    const rimW = shaftW * 1.25;
+    const rimH = c * 0.58;
+    const rimY = pipeMouthY + c * 0.04;
+    const shaftRadius = Math.max(2, c * 0.2);
 
-    g.fillColor = new Color(70, 76, 94, 255);
+    // 管身底色
+    g.fillColor = new Color(24, 150, 48, 255);
     g.roundRect(pipeX - shaftW * 0.5, shaftBottom, shaftW, shaftH, shaftRadius);
     g.fill();
 
-    g.fillColor = new Color(126, 136, 165, 220);
+    // 左侧高光条
+    g.fillColor = new Color(84, 215, 108, 225);
     g.roundRect(
-      pipeX - shaftW * 0.36,
-      shaftBottom + c * 0.18,
-      shaftW * 0.2,
-      Math.max(c * 0.4, shaftH - c * 0.34),
-      Math.max(1, c * 0.08),
+      pipeX - shaftW * 0.35,
+      shaftBottom + c * 0.16,
+      shaftW * 0.24,
+      Math.max(c * 0.4, shaftH - c * 0.28),
+      Math.max(1, c * 0.1),
     );
     g.fill();
 
-    g.fillColor = new Color(62, 67, 84, 255);
-    g.roundRect(pipeX - rimW * 0.5, rimY, rimW, rimH, Math.max(2, c * 0.2));
+    // 右侧阴影条
+    g.fillColor = new Color(18, 112, 36, 230);
+    g.roundRect(
+      pipeX + shaftW * 0.18,
+      shaftBottom + c * 0.14,
+      shaftW * 0.2,
+      Math.max(c * 0.4, shaftH - c * 0.28),
+      Math.max(1, c * 0.1),
+    );
     g.fill();
 
-    g.fillColor = new Color(138, 148, 176, 255);
-    g.roundRect(pipeX - rimW * 0.45, rimY + rimH * 0.46, rimW * 0.9, rimH * 0.38, Math.max(2, c * 0.15));
+    // 管口外沿
+    g.fillColor = new Color(38, 188, 62, 255);
+    g.roundRect(pipeX - rimW * 0.5, rimY, rimW, rimH, Math.max(2, c * 0.24));
     g.fill();
 
-    const openingW = rimW * 0.56;
-    const openingH = Math.max(c * 0.12, rimH * 0.24);
-    g.fillColor = new Color(40, 43, 54, 255);
-    g.roundRect(pipeX - openingW * 0.5, rimY + rimH * 0.4, openingW, openingH, Math.max(1, openingH * 0.4));
+    // 管口顶部高光
+    g.fillColor = new Color(110, 236, 132, 245);
+    g.roundRect(
+      pipeX - rimW * 0.44,
+      rimY + rimH * 0.5,
+      rimW * 0.88,
+      rimH * 0.34,
+      Math.max(1, c * 0.12),
+    );
     g.fill();
 
-    const boltR = Math.max(0.9, c * 0.05);
-    g.fillColor = new Color(175, 185, 214, 235);
-    g.circle(pipeX - rimW * 0.34, rimY + rimH * 0.42, boltR);
-    g.circle(pipeX + rimW * 0.34, rimY + rimH * 0.42, boltR);
+    // 管口内阴影
+    const openingW = rimW * 0.58;
+    const openingH = Math.max(c * 0.14, rimH * 0.25);
+    g.fillColor = new Color(10, 78, 26, 255);
+    g.roundRect(pipeX - openingW * 0.5, rimY + rimH * 0.38, openingW, openingH, Math.max(1, openingH * 0.45));
     g.fill();
 
     const spawnPulse = agents.some(
@@ -163,22 +198,76 @@ export class TerrainDebugRenderer extends Component {
     }
 
     // 目标区（埋在土里的目的地锚点）
-    g.fillColor = new Color(255, 243, 150, 70);
-    g.rect(goal.x * c, goal.y * c, goal.width * c, goal.height * c);
-    g.fill();
-    g.strokeColor = new Color(255, 246, 138, 255);
-    g.lineWidth = boldLine;
-    g.rect(goal.x * c, goal.y * c, goal.width * c, goal.height * c);
-    g.stroke();
-    this.drawGoalMarker(g, goal, c);
+    if (this.showGoalArea) {
+      g.fillColor = this._goalAreaFillColor;
+      g.rect(goal.x * c, goal.y * c, goal.width * c, goal.height * c);
+      g.fill();
+      g.strokeColor = this._goalAreaStrokeColor;
+      g.lineWidth = boldLine;
+      g.rect(goal.x * c, goal.y * c, goal.width * c, goal.height * c);
+      g.stroke();
+    }
+    if (this.showGoalMarker) {
+      this.drawGoalMarker(g, goal, c);
+    }
 
-    // 小人（比纯圆点更醒目）
+    // 小人改为单独覆盖层绘制，保证始终在 GoalSprite 之上。
+    this.drawAgentsOverlay(agents, c, normalLine, thinLine, width, height);
+  }
+
+  private ensureAgentOverlay(): void {
+    if (this._agentOverlayNode && this._agentOverlayGraphics) {
+      return;
+    }
+
+    let node = this.node.getChildByName('AgentOverlay');
+    if (!node) {
+      node = new Node('AgentOverlay');
+      this.node.addChild(node);
+    }
+    node.layer = this.node.layer;
+
+    const transform = node.getComponent(UITransform) ?? node.addComponent(UITransform);
+    transform.setAnchorPoint(0, 0);
+    const graphics = node.getComponent(Graphics) ?? node.addComponent(Graphics);
+
+    this._agentOverlayNode = node;
+    this._agentOverlayGraphics = graphics;
+  }
+
+  private drawAgentsOverlay(
+    agents: readonly AgentState[],
+    c: number,
+    normalLine: number,
+    thinLine: number,
+    width: number,
+    height: number,
+  ): void {
+    this.ensureAgentOverlay();
+    if (!this._agentOverlayNode || !this._agentOverlayGraphics) {
+      return;
+    }
+
+    const node = this._agentOverlayNode;
+    const g = this._agentOverlayGraphics;
+    const transform = node.getComponent(UITransform) ?? node.addComponent(UITransform);
+    transform.setAnchorPoint(0, 0);
+    transform.setContentSize(width, height);
+    node.setPosition(0, 0, 0);
+    node.layer = this.node.layer;
+    // 压在 GoalSprite 上方；GoalDebugOverlay 会在外层再压到最上方。
+    node.setSiblingIndex(this.node.children.length - 1);
+
+    g.clear();
+    let hasVisibleAgent = false;
     for (const agent of agents) {
       if (agent.dead || agent.reachedGoal) {
         continue;
       }
       this.drawAgent(g, c, agent, normalLine, thinLine);
+      hasVisibleAgent = true;
     }
+    node.active = hasVisibleAgent;
   }
 
   private drawGoalMarker(g: Graphics, goal: Rect, c: number): void {
@@ -186,8 +275,9 @@ export class TerrainDebugRenderer extends Component {
     const cy = (goal.y + goal.height * 0.5) * c;
     const goalW = goal.width * c;
     const goalH = goal.height * c;
-    const doorW = Math.max(c * 1.8, Math.min(goalW * 0.72, c * 3.2));
-    const doorH = Math.max(c * 1.8, Math.min(goalH * 0.8, c * 3.2));
+    // 终点贴图尺寸优先跟随 goal 区域（当前目标为 12x12 像素）。
+    const doorW = Math.max(c * 1.8, goalW * 0.92);
+    const doorH = Math.max(c * 1.8, goalH * 0.92);
 
     g.fillColor = new Color(122, 78, 44, 245);
     g.roundRect(cx - doorW * 0.5, cy - doorH * 0.5, doorW, doorH, 5);
@@ -209,7 +299,7 @@ export class TerrainDebugRenderer extends Component {
     const holeInset = Math.max(0.4, c * 0.08);
     const holeRadius = Math.max(1, c * 0.34);
     let hasHole = false;
-    g.fillColor = new Color(36, 130, 24, 255);
+    g.fillColor = new Color(92, 27, 1, 255);
 
     for (let y = 0; y < terrain.rows; y += 1) {
       let x = 0;

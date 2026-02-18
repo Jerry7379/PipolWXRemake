@@ -12,6 +12,10 @@
 
 - 网格原点：左下角 `(0, 0)`。
 - `terrain` 书写：JSON 中从上到下；运行时转换为底部原点索引。
+- 关卡可使用 `terrainTemplate` 参数化描述地形，加载阶段会自动展开为 `terrain` 网格。
+- 终点逻辑区（`goal`）与终点贴图显示（`goalVisual`）可独立配置。
+- `goalVisual.positionMode` 支持贴图位置独立配置：跟随逻辑中心（`goal-center`）或独立坐标（`absolute-cell`）。
+- 终点逻辑区调试框颜色与显示开关由 `goalDebug` 控制。
 - 角色状态更新：固定步长 Tick（默认由 `GameController.fixedStepSec = 0.1` 驱动）。
 
 ## 3. 地形语义
@@ -20,10 +24,16 @@
 - `o`：空格但可编辑（土层中的洞，可回填）。
 - `.`：空格且不可编辑（天空/管道区）。
 
+参数化地形（`terrainTemplate`）当前规则：
+
+- `kind: layered`：顶部 `topAirRows` 行生成 `.`，其余默认生成 `#`。
+- `carveEditableRects`：把指定矩形改为 `o`（可编辑空洞）。
+- `forceSolidRects` / `forceSkyRects`：可选覆盖层。
+
 挖填规则：
 
 - 只能修改可编辑格（`#` 与 `o` 区域）。
-- `protectedCells` 永不可编辑。
+- `protectedCells` / `protectedRects` 永不可编辑。
 - `Fill` 不能直接填在角色当前占据的格子上。
 
 ## 4. 角色生命周期

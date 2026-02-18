@@ -45,6 +45,24 @@ export interface SimulationRules {
   maxSafeFallCells: number;
 }
 
+export type RgbaColor = [number, number, number, number];
+
+export interface GoalVisualConfig {
+  spritePath: string;
+  useFixedPixelSize: boolean;
+  widthPx: number;
+  heightPx: number;
+  longSideScale: number;
+  positionMode: 'goal-center' | 'absolute-cell';
+  positionCell: Int2;
+}
+
+export interface GoalDebugConfig {
+  showArea: boolean;
+  fillRgba: RgbaColor;
+  strokeRgba: RgbaColor;
+}
+
 export const DEFAULT_SIMULATION_RULES: SimulationRules = {
   movementPriority: 'gravity-then-horizontal',
   reverseWhenBlocked: true,
@@ -59,6 +77,22 @@ export const DEFAULT_SIMULATION_RULES: SimulationRules = {
   maxSafeFallCells: -1,
 };
 
+export const DEFAULT_GOAL_VISUAL: GoalVisualConfig = {
+  spritePath: 'images/goal_house_transparent_80k',
+  useFixedPixelSize: true,
+  widthPx: 64,
+  heightPx: 56,
+  longSideScale: 2,
+  positionMode: 'goal-center',
+  positionCell: { x: 0, y: 0 },
+};
+
+export const DEFAULT_GOAL_DEBUG: GoalDebugConfig = {
+  showArea: false,
+  fillRgba: [255, 243, 150, 70],
+  strokeRgba: [255, 246, 138, 255],
+};
+
 export interface LevelConfig {
   id: string;
   name: string;
@@ -67,6 +101,8 @@ export interface LevelConfig {
   requiredSaved: number;
   spawn: SpawnConfig;
   goal: Rect;
+  goalVisual: GoalVisualConfig;
+  goalDebug: GoalDebugConfig;
   simulationRules: SimulationRules;
   protectedCells: Int2[];
   terrain: string[];
